@@ -29,6 +29,9 @@ class PythonEngine(BaseEngine):
                     self.index[partial_key] = SkipList(1024)
                 self.index[partial_key].insert(obj_id, title_score)
 
+    def exists(self, obj_id):
+        return obj_id in self.data
+
     def remove(self, obj_id):
         title, raw_data = self.data[obj_id]
 

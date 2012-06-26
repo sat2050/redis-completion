@@ -29,6 +29,9 @@ class BaseEngine(object):
     def store_json(self, obj_id, title, data_dict):
         return self.store(obj_id, title, json.dumps(data_dict))
 
+    def exists(self, obj_id):
+        raise NotImplementedError
+
     def remove(self, obj_id):
         raise NotImplementedError
 

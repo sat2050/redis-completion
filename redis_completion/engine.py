@@ -57,6 +57,9 @@ class RedisEngine(BaseEngine):
 
         pipe.execute()
 
+    def exists(self, obj_id):
+        return self.client.hexists(self.data_key, obj_id)
+
     def remove(self, obj_id):
         obj_id = str(obj_id)
         title = self.client.hget(self.title_key, obj_id) or ''

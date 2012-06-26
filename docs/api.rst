@@ -67,6 +67,12 @@ API
         before being stored in the index.  Best when used in conjunction with
         :py:meth:`search_json`.
 
+    .. py:method:: exists(obj_id)
+
+        :param obj_id: a unique identifier for the object
+
+        Checks if the given object exists in the index
+
     .. py:method:: remove(obj_id)
 
         :param obj_id: a unique identifier for the object

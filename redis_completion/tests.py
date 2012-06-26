@@ -142,6 +142,11 @@ class BaseCompletionTestCase(object):
             self.engine.clean_phrase('The Best of times, the blurst of times'),
             ['best', 'times', 'blurst', 'times'])
 
+    def test_exists(self):
+        self.assertFalse(self.engine.exists('test'))
+        self.engine.store('test')
+        self.assertTrue(self.engine.exists('test'))
+
 
 class RedisCompletionTestCase(BaseCompletionTestCase, TestCase):
     def get_engine(self):
