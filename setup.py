@@ -14,6 +14,7 @@ setup(
         'redis_completion': [
         ],
     },
+    install_requires=['redis'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
