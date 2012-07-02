@@ -2,7 +2,6 @@ import random
 from unittest import TestCase
 
 from redis_completion.engine import RedisEngine
-from redis_completion.fun.purepy import PythonEngine
 
 
 stop_words = set(['a', 'an', 'the', 'of'])
@@ -172,8 +171,3 @@ class RedisCompletionTestCase(BaseCompletionTestCase, TestCase):
 
         self.engine.remove(1)
         self.assertEqual(len(redis_client.keys()), initial_key_count)
-
-
-class PurePyCompletionTestCase(BaseCompletionTestCase, TestCase):
-    def get_engine(self):
-        return PythonEngine()

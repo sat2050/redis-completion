@@ -1,9 +1,21 @@
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import re
 from redis import Redis
 
-from redis_completion.base import BaseEngine, AGGRESSIVE_STOP_WORDS, DEFAULT_STOP_WORDS
+from redis_completion.stop_words import STOP_WORDS as _STOP_WORDS
 
 
-class RedisEngine(BaseEngine):
+# aggressive stop words will be better when the length of the document is longer
+AGGRESSIVE_STOP_WORDS = _STOP_WORDS
+
+# default stop words should work fine for titles and things like that
+DEFAULT_STOP_WORDS = set(['a', 'an', 'of', 'the'])
+
+
+class RedisEngine(object):
     """
     References
     ----------
@@ -13,7 +25,9 @@ class RedisEngine(BaseEngine):
     http://patshaughnessy.net/2011/11/29/two-ways-of-using-redis-to-build-a-nosql-autocomplete-search-index
     """
     def __init__(self, min_length=2, prefix='ac', stop_words=None, cache_timeout=300, **conn_kwargs):
-        super(RedisEngine, self).__init__(min_length, prefix, stop_words)
+        self.min_length = min_length
+        self.prefix = prefix
+        self.stop_words = (stop_words is None) and DEFAULT_STOP_WORDS or stop_words
 
         self.conn_kwargs = conn_kwargs
         self.client = self.get_client()
@@ -24,8 +38,39 @@ class RedisEngine(BaseEngine):
         self.title_key = '%s:t' % self.prefix
         self.search_key = lambda k: '%s:s:%s' % (self.prefix, k)
 
+        self.kcombine = lambda _id, _type: ''.join([str(_id), '\x01', str(_type)])
+        self.ksplit = lambda k: k.split('\x01', 1)
+
     def get_client(self):
         return Redis(**self.conn_kwargs)
+
+    def score_key(self, k, max_size=20):
+        k_len = len(k)
+        a = ord('a') - 2
+        score = 0
+
+        for i in range(max_size):
+            if i < k_len:
+                c = (ord(k[i]) - a)
+                if c < 2 or c > 27:
+                    c = 1
+            else:
+                c = 1
+            score += c*(27**(max_size-i))
+        return score
+
+    def clean_phrase(self, phrase):
+        phrase = re.sub('[^a-z0-9_\-\s]', '', phrase.lower())
+        return [w for w in phrase.split() if w not in self.stop_words]
+
+    def create_key(self, phrase):
+        return ' '.join(self.clean_phrase(phrase))
+
+    def autocomplete_keys(self, w):
+        ml = self.min_length
+        for i, char in enumerate(w[ml:]):
+            yield w[:i+ml]
+        yield w
 
     def flush(self, everything=False, batch_size=1000):
         if everything:
@@ -38,7 +83,7 @@ class RedisEngine(BaseEngine):
         for i in range(0, len(keys), batch_size):
             self.client.delete(*keys[i:i+batch_size])
 
-    def store(self, obj_id, title=None, data=None):
+    def store(self, obj_id, title=None, data=None, obj_type=None):
         pipe = self.client.pipeline()
 
         if title is None:
@@ -47,6 +92,8 @@ class RedisEngine(BaseEngine):
             data = title
 
         title_score = self.score_key(self.create_key(title))
+
+        obj_id = self.kcombine(obj_id, obj_type or '')
 
         pipe.hset(self.data_key, obj_id, data)
         pipe.hset(self.title_key, obj_id, title)
@@ -57,8 +104,11 @@ class RedisEngine(BaseEngine):
 
         pipe.execute()
 
-    def remove(self, obj_id):
-        obj_id = str(obj_id)
+    def store_json(self, obj_id, title, data_dict):
+        return self.store(obj_id, title, json.dumps(data_dict))
+
+    def remove(self, obj_id, obj_type=None):
+        obj_id = self.kcombine(obj_id, obj_type or '')
         title = self.client.hget(self.title_key, obj_id) or ''
         keys = []
 
@@ -70,14 +120,10 @@ class RedisEngine(BaseEngine):
                 else:
                     self.client.zrem(key, obj_id)
 
-        # finally, remove the data from the data key
         self.client.hdel(self.data_key, obj_id)
         self.client.hdel(self.title_key, obj_id)
 
-    def search(self, phrase, limit=None, filters=None, mappers=None):
-        """
-        Wrap our search & results with prefixing
-        """
+    def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
         cleaned = self.clean_phrase(phrase)
         if not cleaned:
             return []
@@ -87,14 +133,21 @@ class RedisEngine(BaseEngine):
             self.client.zinterstore(new_key, map(self.search_key, cleaned))
             self.client.expire(new_key, self.cache_timeout)
 
+        # O(n) for boosts :/
+        if boosts:
+            # boosts = (('type', 1.5), ('type2', .2)), eg
+            for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
+                obj_id, obj_type = self.ksplit(raw_id)
+
         ct = 0
         data = []
 
-        # grab the data for each object
-        for obj_id in self.client.zrange(new_key, 0, -1):
-            raw_data = self.client.hget(self.data_key, obj_id)
+        for raw_id in self.client.zrange(new_key, 0, -1):
+            raw_data = self.client.hget(self.data_key, raw_id)
             if not raw_data:
                 continue
+
+            obj_id, obj_type = self.ksplit(raw_id)
 
             if mappers:
                 for m in mappers:
@@ -116,3 +169,9 @@ class RedisEngine(BaseEngine):
                 break
 
         return data
+
+    def search_json(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
+        if not mappers:
+            mappers = []
+        mappers.insert(0, json.loads)
+        return self.search(phrase, limit, filters, mappers)
