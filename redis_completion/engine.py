@@ -105,9 +105,6 @@ class RedisEngine(object):
 
         pipe.execute()
 
-    def exists(self, obj_id):
-        return self.client.hexists(self.data_key, obj_id)
-
     def store_json(self, obj_id, title, data_dict, obj_type=None):
         return self.store(obj_id, title, json.dumps(data_dict), obj_type)
 
@@ -126,6 +123,10 @@ class RedisEngine(object):
 
         self.client.hdel(self.data_key, obj_id)
         self.client.hdel(self.title_key, obj_id)
+
+    def exists(self, obj_id, obj_type=None):
+        obj_id = self.kcombine(obj_id, obj_type or '')
+        return self.client.hexists(self.data_key, obj_id)
 
     def get_cache_key(self, phrases, boosts):
         if boosts:
@@ -148,10 +149,8 @@ class RedisEngine(object):
                 self.client.zinterstore(new_key, map(self.search_key, cleaned))
                 self.client.expire(new_key, self.cache_timeout)
 
-        # O(n) for boosts :/
         if boosts:
             pipe = self.client.pipeline()
-            # boosts = {'type1': .9, 'type2': 1.5}
             for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
                 obj_id, obj_type = self.ksplit(raw_id)
                 if obj_type in boosts:
