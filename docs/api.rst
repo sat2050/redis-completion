@@ -95,7 +95,7 @@ API
         :param mappers: a list of callables which will be used to transform the
             raw data returned from the index.
         :param dict boosts: a mapping of type identifier -> float value -- if provided,
-            results of a given type will have their scores multiplied by the corresponding
+            results of a given id/type will have their scores multiplied by the corresponding
             float value
         :rtype: A list containing data returned by the index
 
