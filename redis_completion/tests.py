@@ -100,6 +100,9 @@ class RedisCompletionTestCase(TestCase):
         results = self.engine.search_json('alp', boosts={'t1': 1.5, 't3': 1.6})
         assertExpected(results, [9, 1, 5])
 
+        results = self.engine.search_json('alp', boosts={'t3': 1.5, '5': 1.6})
+        assertExpected(results, [5, 9, 1])
+
     def test_limit(self):
         self.store_data()
 
