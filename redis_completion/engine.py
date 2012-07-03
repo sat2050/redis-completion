@@ -37,6 +37,7 @@ class RedisEngine(object):
         self.data_key = '%s:d' % self.prefix
         self.title_key = '%s:t' % self.prefix
         self.search_key = lambda k: '%s:s:%s' % (self.prefix, k)
+        self.cache_key = lambda pk, bk: '%s:c:%s:%s' % (self.prefix, pk, bk)
 
         self.kcombine = lambda _id, _type: ''.join([str(_id), '\x01', str(_type)])
         self.ksplit = lambda k: k.split('\x01', 1)
@@ -104,8 +105,8 @@ class RedisEngine(object):
 
         pipe.execute()
 
-    def store_json(self, obj_id, title, data_dict):
-        return self.store(obj_id, title, json.dumps(data_dict))
+    def store_json(self, obj_id, title, data_dict, obj_type=None):
+        return self.store(obj_id, title, json.dumps(data_dict), obj_type)
 
     def remove(self, obj_id, obj_type=None):
         obj_id = self.kcombine(obj_id, obj_type or '')
@@ -123,21 +124,36 @@ class RedisEngine(object):
         self.client.hdel(self.data_key, obj_id)
         self.client.hdel(self.title_key, obj_id)
 
+    def get_cache_key(self, phrases, boosts):
+        if boosts:
+            boost_key = '|'.join('%s:%s' % (k, v) for k, v in sorted(boosts.items()))
+        else:
+            boost_key = ''
+        phrase_key = '|'.join(phrases)
+        return self.cache_key(phrase_key, boost_key)
+
     def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
         cleaned = self.clean_phrase(phrase)
         if not cleaned:
             return []
 
-        new_key = self.search_key('|'.join(cleaned))
-        if not self.client.exists(new_key):
-            self.client.zinterstore(new_key, map(self.search_key, cleaned))
-            self.client.expire(new_key, self.cache_timeout)
+        if len(cleaned) == 1 and not boosts:
+            new_key = self.search_key(cleaned[0])
+        else:
+            new_key = self.get_cache_key(cleaned, boosts)
+            if not self.client.exists(new_key):
+                self.client.zinterstore(new_key, map(self.search_key, cleaned))
+                self.client.expire(new_key, self.cache_timeout)
 
         # O(n) for boosts :/
         if boosts:
-            # boosts = (('type', 1.5), ('type2', .2)), eg
+            pipe = self.client.pipeline()
+            # boosts = {'type1': .9, 'type2': 1.5}
             for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
                 obj_id, obj_type = self.ksplit(raw_id)
+                if obj_type in boosts:
+                    pipe.zadd(new_key, raw_id, score * (1 / boosts[obj_type]))
+            pipe.execute()
 
         ct = 0
         data = []
@@ -174,4 +190,4 @@ class RedisEngine(object):
         if not mappers:
             mappers = []
         mappers.insert(0, json.loads)
-        return self.search(phrase, limit, filters, mappers)
+        return self.search(phrase, limit, filters, mappers, boosts)

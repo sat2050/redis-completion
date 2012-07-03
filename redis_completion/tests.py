@@ -6,13 +6,13 @@ from redis_completion.engine import RedisEngine
 
 stop_words = set(['a', 'an', 'the', 'of'])
 
-class BaseCompletionTestCase(object):
+class RedisCompletionTestCase(TestCase):
     def setUp(self):
         self.engine = self.get_engine()
         self.engine.flush()
 
     def get_engine(self):
-        raise NotImplementedError
+        return RedisEngine(prefix='testac', db=15)
 
     def store_data(self, id=None):
         test_data = (
@@ -60,6 +60,45 @@ class BaseCompletionTestCase(object):
 
         results = self.engine.search_json('missing')
         self.assertEqual(results, [])
+
+    def test_boosting(self):
+        test_data = (
+            (1, 'test alpha', 't1'),
+            (2, 'test beta', 't1'),
+            (3, 'test gamma', 't1'),
+            (4, 'test delta', 't1'),
+            (5, 'test alpha', 't2'),
+            (6, 'test beta', 't2'),
+            (7, 'test gamma', 't2'),
+            (8, 'test delta', 't2'),
+            (9, 'test alpha', 't3'),
+            (10, 'test beta', 't3'),
+            (11, 'test gamma', 't3'),
+            (12, 'test delta', 't3'),
+        )
+        for obj_id, title, obj_type in test_data:
+            self.engine.store_json(obj_id, title, {
+                'obj_id': obj_id,
+                'title': title,
+            }, obj_type)
+
+        def assertExpected(results, id_list):
+            self.assertEqual([r['obj_id'] for r in results], id_list)
+
+        results = self.engine.search_json('alp')
+        assertExpected(results, [1, 5, 9])
+
+        results = self.engine.search_json('alp', boosts={'t2': 1.1})
+        assertExpected(results, [5, 1, 9])
+
+        results = self.engine.search_json('test', boosts={'t3': 1.5, 't2': 1.1})
+        assertExpected(results, [9, 10, 12, 11, 5, 6, 8, 7, 1, 2, 4, 3])
+
+        results = self.engine.search_json('alp', boosts={'t1': 0.5})
+        assertExpected(results, [5, 9, 1])
+
+        results = self.engine.search_json('alp', boosts={'t1': 1.5, 't3': 1.6})
+        assertExpected(results, [9, 1, 5])
 
     def test_limit(self):
         self.store_data()
@@ -140,11 +179,6 @@ class BaseCompletionTestCase(object):
         self.assertEqual(
             self.engine.clean_phrase('The Best of times, the blurst of times'),
             ['best', 'times', 'blurst', 'times'])
-
-
-class RedisCompletionTestCase(BaseCompletionTestCase, TestCase):
-    def get_engine(self):
-        return RedisEngine(prefix='testac', db=15)
 
     def test_removing_objects_in_depth(self):
         # want to ensure that redis is cleaned up and does not become polluted
