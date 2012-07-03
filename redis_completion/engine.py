@@ -152,9 +152,9 @@ class RedisEngine(object):
         if boosts:
             pipe = self.client.pipeline()
             for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
-                obj_id, obj_type = self.ksplit(raw_id)
-                if obj_type in boosts:
-                    pipe.zadd(new_key, raw_id, score * (1 / boosts[obj_type]))
+                for part in self.ksplit(raw_id):
+                    if part and part in boosts:
+                        pipe.zadd(new_key, raw_id, score * (1 / boosts[part]))
             pipe.execute()
 
         ct = 0
