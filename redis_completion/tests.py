@@ -213,3 +213,34 @@ class RedisCompletionTestCase(TestCase):
 
         self.engine.remove(1)
         self.assertEqual(len(redis_client.keys()), initial_key_count)
+
+    def test_updating(self):
+        self.engine.store('id1', 'title one', 'd1', 't1')
+        self.engine.store('id2', 'title two', 'd2', 't2')
+        self.engine.store('id3', 'title three', 'd3', 't3')
+
+        results = self.engine.search('tit')
+        self.assertEqual(results, ['d1', 'd3', 'd2'])
+
+        # overwrite the data for id1
+        self.engine.store('id1', 'title one', 'D1', 't1')
+
+        results = self.engine.search('tit')
+        self.assertEqual(results, ['D1', 'd3', 'd2'])
+
+        # overwrite the data with a new title, will remove the title one refs
+        self.engine.store('id1', 'Herple One', 'done', 't1')
+
+        results = self.engine.search('tit')
+        self.assertEqual(results, ['d3', 'd2'])
+
+        results = self.engine.search('her')
+        self.assertEqual(results, ['done'])
+
+        self.engine.store('id1', 'title one', 'Done', 't1', False)
+        results = self.engine.search('tit')
+        self.assertEqual(results, ['Done', 'd3', 'd2'])
+
+        # this shows that when we don't clean up crap gets left around
+        results = self.engine.search('her')
+        self.assertEqual(results, ['Done'])

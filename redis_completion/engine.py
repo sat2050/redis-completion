@@ -84,9 +84,7 @@ class RedisEngine(object):
         for i in range(0, len(keys), batch_size):
             self.client.delete(*keys[i:i+batch_size])
 
-    def store(self, obj_id, title=None, data=None, obj_type=None):
-        pipe = self.client.pipeline()
-
+    def store(self, obj_id, title=None, data=None, obj_type=None, check_exist=True):
         if title is None:
             title = obj_id
         if data is None:
@@ -94,14 +92,26 @@ class RedisEngine(object):
 
         title_score = self.score_key(self.create_key(title))
 
-        obj_id = self.kcombine(obj_id, obj_type or '')
+        combined_id = self.kcombine(obj_id, obj_type or '')
 
-        pipe.hset(self.data_key, obj_id, data)
-        pipe.hset(self.title_key, obj_id, title)
+        if check_exist and self.exists(obj_id, obj_type):
+            stored_title = self.client.hget(self.title_key, combined_id)
+
+            # if the stored title is the same, we can simply update the data key
+            # since everything else will have stayed the same
+            if stored_title == title:
+                self.client.hset(self.data_key, combined_id, data)
+                return
+            else:
+                self.remove(obj_id, obj_type)
+
+        pipe = self.client.pipeline()
+        pipe.hset(self.data_key, combined_id, data)
+        pipe.hset(self.title_key, combined_id, title)
 
         for word in self.clean_phrase(title):
             for partial_key in self.autocomplete_keys(word):
-                pipe.zadd(self.search_key(partial_key), obj_id, title_score)
+                pipe.zadd(self.search_key(partial_key), combined_id, title_score)
 
         pipe.execute()
 
