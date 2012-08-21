@@ -114,3 +114,12 @@ API
 
         Like :py:meth:`search` except ``json.loads`` is inserted as the very first
         mapper.  Best when used in conjunction with :py:meth:`store_json`.
+
+    .. py:method:: flush([everything=False[, batch_size=1000]])
+
+        Clears all data from the database.  By default will only delete keys that are
+        associated with the given engine (based on its prefix), but if ``everything`` is
+        ``True``, then the entire database will be flushed.  The latter is faster.
+
+        :param boolean everything: whether to delete the entire current redis db
+        :param int batch_size: number of keys to delete at-a-time
