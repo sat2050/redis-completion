@@ -205,3 +205,23 @@ class RedisEngine(object):
             mappers = []
         mappers.insert(0, json.loads)
         return self.search(phrase, limit, filters, mappers, boosts)
+
+    def similar(self, phrase, limit=None):
+        raw = {}
+        cleaned = self.clean_phrase(phrase)
+        for term in cleaned:
+            raw[term] = self.client.zrange(self.search_key(term), 0, -1)
+        item_counts = {}
+        for term, id_list in raw.items():
+            for item_id in id_list:
+                item_counts.setdefault(item_id, 0)
+                item_counts[item_id] += 1
+        result = sorted(item_counts.items(), key=lambda i: i[1], reverse=True)
+        if limit:
+            result = result[:limit]
+        data = []
+        for raw_id, _ in result:
+            raw_data = self.client.hget(self.data_key, raw_id)
+            if raw_data:
+                data.append(raw_data)
+        return data
