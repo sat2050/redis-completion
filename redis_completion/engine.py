@@ -222,7 +222,7 @@ class RedisEngine(object):
                 item_counts.setdefault(item_id, 0)
                 item_counts[item_id] += weight
         result = sorted(item_counts.items(), key=lambda i: i[1], reverse=True)
-        return self._process_ids(map(result, lambda i: i[0]), limit, filters, mappers)
+        return self._process_ids(map(lambda i: i[0], result), limit, filters, mappers)
 
     def similar_json(self, phrase, limit=None, filters=None, mappers=None):
         if not mappers:
