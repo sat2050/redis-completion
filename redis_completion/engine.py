@@ -213,9 +213,10 @@ class RedisEngine(object):
             raw[term] = self.client.zrange(self.search_key(term), 0, -1)
         item_counts = {}
         for term, id_list in raw.items():
+            weight = 1.0 / len(id_list)
             for item_id in id_list:
                 item_counts.setdefault(item_id, 0)
-                item_counts[item_id] += 1
+                item_counts[item_id] += weight
         result = sorted(item_counts.items(), key=lambda i: i[1], reverse=True)
         if limit:
             result = result[:limit]
