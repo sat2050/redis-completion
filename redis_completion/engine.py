@@ -146,35 +146,11 @@ class RedisEngine(object):
         phrase_key = '|'.join(phrases)
         return self.cache_key(phrase_key, boost_key)
 
-    def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
-        cleaned = self.clean_phrase(phrase)
-        if not cleaned:
-            return []
-
-        if len(cleaned) == 1 and not boosts:
-            new_key = self.search_key(cleaned[0])
-        else:
-            new_key = self.get_cache_key(cleaned, boosts)
-            if not self.client.exists(new_key):
-                # zinterstore also takes {k1: wt1, k2: wt2}
-                self.client.zinterstore(new_key, map(self.search_key, cleaned))
-                self.client.expire(new_key, self.cache_timeout)
-
-        if boosts:
-            pipe = self.client.pipeline()
-            for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
-                orig_score = score
-                for part in self.ksplit(raw_id):
-                    if part and part in boosts:
-                        score *= 1 / boosts[part]
-                if orig_score != score:
-                    pipe.zadd(new_key, raw_id, score)
-            pipe.execute()
-
+    def _process_ids(self, id_list, limit, filters, mappers):
         ct = 0
         data = []
 
-        for raw_id in self.client.zrange(new_key, 0, -1):
+        for raw_id in id_list:
             raw_data = self.client.hget(self.data_key, raw_id)
             if not raw_data:
                 continue
@@ -200,13 +176,41 @@ class RedisEngine(object):
 
         return data
 
+    def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
+        cleaned = self.clean_phrase(phrase)
+        if not cleaned:
+            return []
+
+        if len(cleaned) == 1 and not boosts:
+            new_key = self.search_key(cleaned[0])
+        else:
+            new_key = self.get_cache_key(cleaned, boosts)
+            if not self.client.exists(new_key):
+                # zinterstore also takes {k1: wt1, k2: wt2}
+                self.client.zinterstore(new_key, map(self.search_key, cleaned))
+                self.client.expire(new_key, self.cache_timeout)
+
+        if boosts:
+            pipe = self.client.pipeline()
+            for raw_id, score in self.client.zrange(new_key, 0, -1, withscores=True):
+                orig_score = score
+                for part in self.ksplit(raw_id):
+                    if part and part in boosts:
+                        score *= 1 / boosts[part]
+                if orig_score != score:
+                    pipe.zadd(new_key, raw_id, score)
+            pipe.execute()
+
+        id_list = self.client.zrange(new_key, 0, -1)
+        return self._process_ids(id_list, limit, filters, mappers)
+
     def search_json(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
         if not mappers:
             mappers = []
         mappers.insert(0, json.loads)
         return self.search(phrase, limit, filters, mappers, boosts)
 
-    def similar(self, phrase, limit=None):
+    def similar(self, phrase, limit=None, filters=None, mappers=None):
         raw = {}
         cleaned = self.clean_phrase(phrase)
         for term in cleaned:
@@ -218,11 +222,10 @@ class RedisEngine(object):
                 item_counts.setdefault(item_id, 0)
                 item_counts[item_id] += weight
         result = sorted(item_counts.items(), key=lambda i: i[1], reverse=True)
-        if limit:
-            result = result[:limit]
-        data = []
-        for raw_id, _ in result:
-            raw_data = self.client.hget(self.data_key, raw_id)
-            if raw_data:
-                data.append(raw_data)
-        return data
+        return self._process_ids(map(result, lambda i: i[0]), limit, filters, mappers)
+
+    def similar_json(self, phrase, limit=None, filters=None, mappers=None):
+        if not mappers:
+            mappers = []
+        mappers.insert(0, json.loads)
+        return self.similar(phrase, limit, filters, mappers)
