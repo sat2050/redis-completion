@@ -217,6 +217,8 @@ class RedisEngine(object):
             raw[term] = self.client.zrange(self.search_key(term), 0, -1)
         item_counts = {}
         for term, id_list in raw.items():
+            if not id_list:
+                continue
             weight = 1.0 / len(id_list)
             for item_id in id_list:
                 item_counts.setdefault(item_id, 0)
