@@ -244,23 +244,3 @@ class RedisCompletionTestCase(TestCase):
         # this shows that when we don't clean up crap gets left around
         results = self.engine.search('her')
         self.assertEqual(results, ['Done'])
-
-    def test_similar(self):
-        test_data = (
-            ('term1 term2 term3'),
-            ('term4 term5 term6'),
-            ('term1 term2 term6'),
-            ('term3 term4 term7'),
-            ('term2'),
-        )
-        for td in test_data:
-            self.engine.store(td)
-
-        def assertTerms(phrase, *expected_idx):
-            self.assertEqual(self.engine.similar(phrase), [test_data[i] for i in expected_idx])
-
-        assertTerms('term1', 0, 2)
-        assertTerms('term1 term2', 0, 2, 4)
-        assertTerms('term2 term3', 0, 3, 4, 2)
-        assertTerms('term3 term7', 3, 0)
-        assertTerms('term8')

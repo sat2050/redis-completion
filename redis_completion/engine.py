@@ -209,25 +209,3 @@ class RedisEngine(object):
             mappers = []
         mappers.insert(0, json.loads)
         return self.search(phrase, limit, filters, mappers, boosts)
-
-    def similar(self, phrase, limit=None, filters=None, mappers=None):
-        raw = {}
-        cleaned = self.clean_phrase(phrase)
-        for term in cleaned:
-            raw[term] = self.client.zrange(self.search_key(term), 0, -1)
-        item_counts = {}
-        for term, id_list in raw.items():
-            if not id_list:
-                continue
-            weight = 1.0 / len(id_list)
-            for item_id in id_list:
-                item_counts.setdefault(item_id, 0)
-                item_counts[item_id] += weight
-        result = sorted(item_counts.items(), key=lambda i: i[1], reverse=True)
-        return self._process_ids(map(lambda i: i[0], result), limit, filters, mappers)
-
-    def similar_json(self, phrase, limit=None, filters=None, mappers=None):
-        if not mappers:
-            mappers = []
-        mappers.insert(0, json.loads)
-        return self.similar(phrase, limit, filters, mappers)
