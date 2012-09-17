@@ -82,7 +82,19 @@ API
 
         Removes the given object from the index.
 
-    .. py:method:: search(phrase[, limit=None[, filters=None[, mappers=None[, boosts=None]]]])
+    .. py:method:: boost(obj_id[, multiplier=1.1[, negative=False]])
+
+        :param obj_id: a unique identifier for the object
+        :param float multiplier: a float indicating how much to boost obj_id by, where
+            greater than one will push to the front, less than will push to the back
+        :param boolean negative: whether to push forward or backward (if negative, will
+            simply inverse the multiplier)
+
+        Boost the score of the given ``obj_id`` by the multiplier, then store the result
+        in a special hash.  These stored "boosts" can later be recalled when searching
+        by specifying ``autoboost=True``.
+
+    .. py:method:: search(phrase[, limit=None[, filters=None[, mappers=None[, boosts=None[, autoboost=False]]]]])
 
         :param phrase: search the index for the given phrase
         :param limit: an integer indicating the number of results to limit the
@@ -96,7 +108,9 @@ API
             raw data returned from the index.
         :param dict boosts: a mapping of type identifier -> float value -- if provided,
             results of a given id/type will have their scores multiplied by the corresponding
-            float value
+            float value, e.g. ``{'id1': 1.1, 'id2': 1.3, 'id3': .9}``
+        :param boolean autoboost: automatically prepopulate boosts by looking at the
+            stored boost information created using the :py:meth:`~RedisEngine.boost` api
         :rtype: A list containing data returned by the index
 
         .. note:: Mappers act upon data before it is passed to the filters
@@ -110,7 +124,7 @@ API
             [{'published': True, 'title': 'an entry about python', 'url': '/blog/1/'},
              {'published': False, 'title': 'using redis with python', 'url': '/blog/3/'}]
 
-    .. py:method:: search_json(phrase[, limit=None[, filters=None[, mappers=None[, boosts=None]]]])
+    .. py:method:: search_json(phrase[, limit=None[, filters=None[, mappers=None[, boosts=None[, autoboost=False]]]]])
 
         Like :py:meth:`search` except ``json.loads`` is inserted as the very first
         mapper.  Best when used in conjunction with :py:meth:`store_json`.
