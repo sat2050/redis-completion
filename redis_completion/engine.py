@@ -221,8 +221,8 @@ class RedisEngine(object):
         id_list = self.client.zrange(new_key, 0, -1)
         return self._process_ids(id_list, limit, filters, mappers)
 
-    def search_json(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
+    def search_json(self, phrase, limit=None, filters=None, mappers=None, boosts=None, autoboost=False):
         if not mappers:
             mappers = []
         mappers.insert(0, json.loads)
-        return self.search(phrase, limit, filters, mappers, boosts)
+        return self.search(phrase, limit, filters, mappers, boosts, autoboost)
