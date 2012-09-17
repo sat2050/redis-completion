@@ -34,6 +34,7 @@ class RedisEngine(object):
 
         self.cache_timeout = cache_timeout
 
+        self.boost_key = '%s:b' % self.prefix
         self.data_key = '%s:d' % self.prefix
         self.title_key = '%s:t' % self.prefix
         self.search_key = lambda k: '%s:s:%s' % (self.prefix, k)
@@ -133,6 +134,15 @@ class RedisEngine(object):
 
         self.client.hdel(self.data_key, obj_id)
         self.client.hdel(self.title_key, obj_id)
+        self.client.hdel(self.boost_key, obj_id)
+
+    def boost(self, obj_id, multiplier=1.1, negative=False):
+        # take the existing boost for this item and increase it by the multiplier
+        current = self.client.hget(self.boost_key, obj_id)
+        current_f = float(current or 1.0)
+        if negative:
+            multiplier = 1 / multiplier
+        self.client.hset(self.boost_key, obj_id, current_f * multiplier)
 
     def exists(self, obj_id, obj_type=None):
         obj_id = self.kcombine(obj_id, obj_type or '')
@@ -176,10 +186,17 @@ class RedisEngine(object):
 
         return data
 
-    def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None):
+    def search(self, phrase, limit=None, filters=None, mappers=None, boosts=None, autoboost=False):
         cleaned = self.clean_phrase(phrase)
         if not cleaned:
             return []
+
+        if autoboost:
+            boosts = boosts or {}
+            stored = self.client.hgetall(self.boost_key)
+            for obj_id in stored:
+                if obj_id not in boosts:
+                    boosts[obj_id] = float(stored[obj_id])
 
         if len(cleaned) == 1 and not boosts:
             new_key = self.search_key(cleaned[0])

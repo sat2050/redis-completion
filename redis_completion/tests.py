@@ -103,6 +103,37 @@ class RedisCompletionTestCase(TestCase):
         results = self.engine.search_json('alp', boosts={'t3': 1.5, '5': 1.6})
         assertExpected(results, [5, 9, 1])
 
+    def test_autoboost(self):
+        self.engine.store('t1', 'testing 1')
+        self.engine.store('t2', 'testing 2')
+        self.engine.store('t3', 'testing 3')
+        self.engine.store('t4', 'testing 4')
+        self.engine.store('t5', 'testing 5')
+
+        def assertExpected(results, id_list):
+            self.assertEqual(results, ['testing %s' % i for i in id_list])
+
+        results = self.engine.search('testing', autoboost=True)
+        assertExpected(results, [1, 2, 3, 4, 5])
+
+        self.engine.boost('t3')
+        results = self.engine.search('testing', autoboost=True)
+        assertExpected(results, [3, 1, 2, 4, 5])
+
+        self.engine.boost('t2')
+        results = self.engine.search('testing', autoboost=True)
+        assertExpected(results, [2, 3, 1, 4, 5])
+
+        self.engine.boost('t1', negative=True)
+        results = self.engine.search('testing', autoboost=True)
+        assertExpected(results, [2, 3, 4, 5, 1])
+
+        results = self.engine.search('testing', boosts={'t5': 4.0}, autoboost=True)
+        assertExpected(results, [5, 2, 3, 4, 1])
+
+        results = self.engine.search('testing', boosts={'t3': 1.5}, autoboost=True)
+        assertExpected(results, [3, 2, 4, 5, 1])
+
     def test_limit(self):
         self.store_data()
 
