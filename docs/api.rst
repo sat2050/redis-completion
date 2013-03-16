@@ -3,11 +3,9 @@
 API
 ===
 
-.. py:class:: RedisEngine(min_length=2, prefix='ac', stop_words=None, \
+.. py:class:: RedisEngine(prefix='ac', stop_words=None, \
                           cache_timeout=300, **conn_kwargs)
 
-    :param integer min_length: the minimum length a phrase has to be to return meaningful
-        search results
     :param string prefix: a prefix used for all keys stored in Redis to allow multiple
         "indexes" to exist and to make deletion easier.
     :param set stop_words: a ``set`` of stop words to remove from index/search data
