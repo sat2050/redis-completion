@@ -166,6 +166,10 @@ class RedisCompletionTestCase(TestCase):
         results = self.engine.search('code')
         self.assertEqual(results, ['testing python code', 'web testing python code'])
 
+        self.engine.store('z python code')
+        results = self.engine.search('cod')
+        self.assertEqual(results, ['testing python code', 'z python code', 'web testing python code'])
+
     def test_correct_sorting(self):
         strings = []
         for i in range(26):
@@ -275,3 +279,31 @@ class RedisCompletionTestCase(TestCase):
         # this shows that when we don't clean up crap gets left around
         results = self.engine.search('her')
         self.assertEqual(results, ['Done'])
+
+    def test_issue9_ordering(self):
+        self.engine.store('aaaa bbbb')
+        self.engine.store('bbbb cccc')
+        self.engine.store('bbbb aaaa')
+        self.engine.store('aaaa bbbb')
+
+        results = self.engine.search('bb')
+        self.assertEqual(results, ['bbbb aaaa', 'bbbb cccc', 'aaaa bbbb'])
+
+        results = self.engine.search('aa')
+        self.assertEqual(results, ['aaaa bbbb', 'bbbb aaaa'])
+
+        self.engine.store('aabb bbbb')
+
+        results = self.engine.search('bb')
+        self.assertEqual(results, ['bbbb aaaa', 'bbbb cccc', 'aaaa bbbb', 'aabb bbbb'])
+
+        results = self.engine.search('aa')
+        self.assertEqual(results, ['aaaa bbbb', 'aabb bbbb', 'bbbb aaaa'])
+
+        self.engine.store('foo one')
+        self.engine.store('bar foo one')
+
+        # Unfortunately, this use-case is still not working.  Desired results
+        # would be "foo one", "bar foo one"
+        results = self.engine.search('foo')
+        self.assertEqual(results, ['bar foo one', 'foo one'])

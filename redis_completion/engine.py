@@ -108,9 +108,11 @@ class RedisEngine(object):
         pipe.hset(self.data_key, combined_id, data)
         pipe.hset(self.title_key, combined_id, title)
 
-        for word in self.clean_phrase(title):
+        for i, word in enumerate(self.clean_phrase(title)):
+            word_score = self.score_key(word) + (27**20)
+            key_score = word_score + (title_score * (i + 1))
             for partial_key in self.autocomplete_keys(word):
-                pipe.zadd(self.search_key(partial_key), combined_id, title_score)
+                pipe.zadd(self.search_key(partial_key), combined_id, key_score)
 
         pipe.execute()
 
