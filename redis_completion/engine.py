@@ -41,6 +41,7 @@ class RedisEngine(object):
 
         self.kcombine = lambda _id, _type: ''.join([str(_id), '\x01', str(_type)])
         self.ksplit = lambda k: k.split('\x01', 1)
+        self._offset = 27**20
 
     def get_client(self):
         return Redis(**self.conn_kwargs)
@@ -109,7 +110,7 @@ class RedisEngine(object):
         pipe.hset(self.title_key, combined_id, title)
 
         for i, word in enumerate(self.clean_phrase(title)):
-            word_score = self.score_key(word) + (27**20)
+            word_score = self.score_key(word) + self._offset
             key_score = (word_score * (i + 1)) + (title_score)
             for partial_key in self.autocomplete_keys(word):
                 pipe.zadd(self.search_key(partial_key), combined_id, key_score)
