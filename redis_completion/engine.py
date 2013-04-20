@@ -24,14 +24,14 @@ class RedisEngine(object):
     http://stackoverflow.com/questions/1958005/redis-autocomplete/1966188#1966188
     http://patshaughnessy.net/2011/11/29/two-ways-of-using-redis-to-build-a-nosql-autocomplete-search-index
     """
-    def __init__(self, prefix='ac', stop_words=None, cache_timeout=300, **conn_kwargs):
+    def __init__(self, prefix='ac', stop_words=None, cache_timeout=300,
+                 **conn_kwargs):
         self.prefix = prefix
         self.stop_words = (stop_words is None) and DEFAULT_STOP_WORDS or stop_words
+        self.cache_timeout = cache_timeout
 
         self.conn_kwargs = conn_kwargs
         self.client = self.get_client()
-
-        self.cache_timeout = cache_timeout
 
         self.boost_key = '%s:b' % self.prefix
         self.data_key = '%s:d' % self.prefix
@@ -110,7 +110,7 @@ class RedisEngine(object):
 
         for i, word in enumerate(self.clean_phrase(title)):
             word_score = self.score_key(word) + (27**20)
-            key_score = word_score + (title_score * (i + 1))
+            key_score = (word_score * (i + 1)) + (title_score)
             for partial_key in self.autocomplete_keys(word):
                 pipe.zadd(self.search_key(partial_key), combined_id, key_score)
 

@@ -300,10 +300,9 @@ class RedisCompletionTestCase(TestCase):
         results = self.engine.search('aa')
         self.assertEqual(results, ['aaaa bbbb', 'aabb bbbb', 'bbbb aaaa'])
 
+        # Verify issue 9 is fixed.
         self.engine.store('foo one')
         self.engine.store('bar foo one')
 
-        # Unfortunately, this use-case is still not working.  Desired results
-        # would be "foo one", "bar foo one"
         results = self.engine.search('foo')
-        self.assertEqual(results, ['bar foo one', 'foo one'])
+        self.assertEqual(results, ['foo one', 'bar foo one'])
