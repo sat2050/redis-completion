@@ -2,6 +2,7 @@ try:
     import simplejson as json
 except ImportError:
     import json
+from itertools import izip_longest
 import re
 from redis import Redis
 
@@ -13,6 +14,10 @@ AGGRESSIVE_STOP_WORDS = _STOP_WORDS
 
 # default stop words should work fine for titles and things like that
 DEFAULT_STOP_WORDS = set(['a', 'an', 'of', 'the'])
+
+
+# Keep track of empty objects.
+_sentinel = object()
 
 
 class RedisEngine(object):
@@ -160,33 +165,47 @@ class RedisEngine(object):
         phrase_key = '|'.join(phrases)
         return self.cache_key(phrase_key, boost_key)
 
+    def _chunked(self, iterable, n):
+        for group in (list(g) for g in izip_longest(*[iter(iterable)] * n,
+                                                    fillvalue=_sentinel)):
+            if group[-1] is _sentinel:
+                del group[group.index(_sentinel):]
+            yield group
+
     def _process_ids(self, id_list, limit, filters, mappers):
         ct = 0
         data = []
+        if not id_list:
+            return data
 
-        for raw_id in id_list:
-            raw_data = self.client.hget(self.data_key, raw_id)
-            if not raw_data:
-                continue
+        if limit is not None:
+            chunks = self._chunked(id_list, limit)
+        else:
+            chunks = [id_list]
 
-            if mappers:
-                for m in mappers:
-                    raw_data = m(raw_data)
-
-            if filters:
-                passes = True
-                for f in filters:
-                    if not f(raw_data):
-                        passes = False
-                        break
-
-                if not passes:
+        for chunk in chunks:
+            for raw_data in self.client.hmget(self.data_key, chunk):
+                if not raw_data:
                     continue
 
-            data.append(raw_data)
-            ct += 1
-            if limit and ct == limit:
-                break
+                if mappers:
+                    for m in mappers:
+                        raw_data = m(raw_data)
+
+                if filters:
+                    passes = True
+                    for f in filters:
+                        if not f(raw_data):
+                            passes = False
+                            break
+
+                    if not passes:
+                        continue
+
+                data.append(raw_data)
+                ct += 1
+                if limit and ct == limit:
+                    return data
 
         return data
 
