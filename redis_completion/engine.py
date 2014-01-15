@@ -70,6 +70,7 @@ class RedisEngine(object):
         return score
 
     def clean_phrase(self, phrase):
+        phrase = re.sub('[_\-]', ' ', phrase)
         phrase = re.sub('[^a-z0-9_\-\s]', '', phrase.lower())
         return [w for w in phrase.split() if w not in self.stop_words]
 
